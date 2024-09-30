@@ -4,21 +4,39 @@ import os
 import io
 
 def load_csv(file):
-    return pd.read_csv(file)
+    try:
+        return pd.read_csv(file)
+    except Exception as e:
+        st.error(f"Error reading file {file.name}: {str(e)}")
+        return None
 
 def merge_csvs(files, unique_identifier):
-    dfs = [load_csv(file) for file in files]
+    dfs = []
+    for file in files:
+        df = load_csv(file)
+        if df is not None:
+            dfs.append(df)
+        else:
+            return None
+    
+    if not dfs:
+        st.error("No valid CSV files were uploaded.")
+        return None
     
     # Check if the unique identifier exists in all DataFrames
     for i, df in enumerate(dfs):
         if unique_identifier not in df.columns:
-            st.error(f"Error: The unique identifier '{unique_identifier}' is not present in file {i+1}.")
+            st.error(f"Error: The unique identifier '{unique_identifier}' is not present in file {files[i].name}.")
             return None
     
     # Merge all DataFrames
     merged_df = dfs[0]
-    for df in dfs[1:]:
-        merged_df = pd.merge(merged_df, df, on=unique_identifier, how='outer')
+    for i, df in enumerate(dfs[1:], start=1):
+        try:
+            merged_df = pd.merge(merged_df, df, on=unique_identifier, how='outer', suffixes=('', f'_{i}'))
+        except Exception as e:
+            st.error(f"Error merging file {files[i].name}: {str(e)}")
+            return None
     
     return merged_df
 
