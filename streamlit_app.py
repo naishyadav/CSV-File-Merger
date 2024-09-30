@@ -19,6 +19,11 @@ def comprehensive_merge(dfs, unique_identifier):
     
     # Iterate through the rest of the DataFrames
     for df in dfs[1:]:
+        # Ensure the unique identifier is in the current DataFrame
+        if unique_identifier not in df.columns:
+            st.warning(f"Unique identifier '{unique_identifier}' not found in one of the files. Skipping this file.")
+            continue
+        
         # Identify new columns in the current DataFrame
         new_columns = [col for col in df.columns if col not in merged_df.columns and col != unique_identifier]
         
@@ -45,19 +50,15 @@ def merge_csvs(files, unique_identifier):
     for file in files:
         df = load_csv(file)
         if df is not None:
+            # Ensure the unique identifier is in the DataFrame
+            if unique_identifier not in df.columns:
+                st.warning(f"Unique identifier '{unique_identifier}' not found in file {file.name}. Skipping this file.")
+                continue
             dfs.append(df)
-        else:
-            return None
     
     if not dfs:
-        st.error("No valid CSV files were uploaded.")
+        st.error("No valid CSV files were uploaded or all files were skipped due to missing identifier.")
         return None
-    
-    # Check if the unique identifier exists in all DataFrames
-    for i, df in enumerate(dfs):
-        if unique_identifier not in df.columns:
-            st.error(f"Error: The unique identifier '{unique_identifier}' is not present in file {files[i].name}.")
-            return None
     
     try:
         merged_df = comprehensive_merge(dfs, unique_identifier)
