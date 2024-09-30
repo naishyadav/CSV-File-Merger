@@ -11,21 +11,32 @@ def load_csv(file):
         return None
 
 def comprehensive_merge(dfs, unique_identifier):
-    # Start with the first DataFrame
+    # Start with the first DataFrame to maintain its order
     merged_df = dfs[0]
+    
+    # Create a set of existing identifiers
+    existing_ids = set(merged_df[unique_identifier])
     
     # Iterate through the rest of the DataFrames
     for df in dfs[1:]:
         # Identify new columns in the current DataFrame
         new_columns = [col for col in df.columns if col not in merged_df.columns and col != unique_identifier]
         
-        # Merge the current DataFrame with only its new columns
-        merged_df = pd.merge(
-            merged_df, 
-            df[[unique_identifier] + new_columns], 
-            on=unique_identifier, 
-            how='outer'
-        )
+        # Identify new rows in the current DataFrame
+        new_rows = df[~df[unique_identifier].isin(existing_ids)]
+        
+        # Add new columns to merged_df (fill with NaN for existing rows)
+        for col in new_columns:
+            merged_df[col] = pd.NA
+        
+        # Update existing rows with new data
+        merged_df.update(df.set_index(unique_identifier), overwrite=False)
+        
+        # Append new rows
+        merged_df = pd.concat([merged_df, new_rows[merged_df.columns]], ignore_index=True)
+        
+        # Update the set of existing identifiers
+        existing_ids.update(new_rows[unique_identifier])
     
     return merged_df
 
@@ -60,7 +71,7 @@ def main():
     st.set_page_config(page_title="CSV Merger App", layout="wide")
     
     st.title("CSV Merger App")
-    st.write("This app merges multiple CSV files into a master CSV file using a unique identifier, combining all unique data and columns.")
+    st.write("This app merges multiple CSV files into a master CSV file using a unique identifier, combining all unique data and columns while maintaining the original order.")
     
     # File uploader
     uploaded_files = st.file_uploader("Choose CSV files", accept_multiple_files=True, type="csv")
