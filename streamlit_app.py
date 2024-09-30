@@ -1,86 +1,75 @@
 import streamlit as st
 import pandas as pd
+import os
 import io
 
-def read_csv_file(file):
-    try:
-        df = pd.read_csv(file)
-        if df.empty:
-            return None, "The file is empty."
-        return df, None
-    except Exception as e:
-        return None, f"Error reading file: {str(e)}"
+def load_csv(file):
+    return pd.read_csv(file)
 
-def merge_csv_files(files, identifier):
-    dataframes = []
-    for file in files:
-        df, error = read_csv_file(file)
-        if df is not None:
-            if identifier in df.columns:
-                dataframes.append(df)
-            else:
-                st.warning(f"File {file.name} does not contain the identifier column '{identifier}'. Skipping this file.")
-        else:
-            st.warning(f"Skipping file {file.name}: {error}")
+def merge_csvs(files, unique_identifier):
+    dfs = [load_csv(file) for file in files]
     
-    if not dataframes:
-        return None, "No valid dataframes to merge."
-
-    merged_df = dataframes[0]
-    for df in dataframes[1:]:
-        merged_df = pd.merge(merged_df, df, on=identifier, how='outer')
-
-    return merged_df, None
-
-st.title("CSV File Merger")
-
-uploaded_files = st.file_uploader("Choose CSV files", accept_multiple_files=True, type="csv")
-
-if uploaded_files:
-    st.write(f"Number of files uploaded: {len(uploaded_files)}")
+    # Check if the unique identifier exists in all DataFrames
+    for i, df in enumerate(dfs):
+        if unique_identifier not in df.columns:
+            st.error(f"Error: The unique identifier '{unique_identifier}' is not present in file {i+1}.")
+            return None
     
-    # Read the first file to get potential identifiers
-    first_df, _ = read_csv_file(uploaded_files[0])
-    if first_df is not None:
-        potential_identifiers = first_df.columns.tolist()
-        unique_identifier = st.selectbox("Select the unique identifier column", potential_identifiers)
+    # Merge all DataFrames
+    merged_df = dfs[0]
+    for df in dfs[1:]:
+        merged_df = pd.merge(merged_df, df, on=unique_identifier, how='outer')
+    
+    return merged_df
+
+def main():
+    st.set_page_config(page_title="CSV Merger App", layout="wide")
+    
+    st.title("CSV Merger App")
+    st.write("This app merges multiple CSV files into a master CSV file using a unique identifier.")
+    
+    # File uploader
+    uploaded_files = st.file_uploader("Choose CSV files", accept_multiple_files=True, type="csv")
+    
+    if uploaded_files:
+        st.write("Uploaded files:")
+        for file in uploaded_files:
+            st.write(f"- {file.name}")
         
-        if st.button("Merge Files"):
-            merged_df, error = merge_csv_files(uploaded_files, unique_identifier)
-            
-            if merged_df is not None:
-                st.success("Files merged successfully!")
-                st.write(f"Total rows in merged file: {len(merged_df)}")
-                st.write(f"Columns in merged file: {', '.join(merged_df.columns)}")
-                
-                st.dataframe(merged_df.head())
-                
-                csv_buffer = io.StringIO()
-                merged_df.to_csv(csv_buffer, index=False)
-                csv_str = csv_buffer.getvalue()
-                
-                st.download_button(
-                    label="Download Merged CSV",
-                    data=csv_str,
-                    file_name="merged_file.csv",
-                    mime="text/csv"
-                )
+        # Unique identifier input
+        unique_identifier = st.text_input("Enter the unique identifier column name:")
+        
+        if st.button("Merge CSV Files"):
+            if not unique_identifier:
+                st.error("Please enter a unique identifier column name.")
             else:
-                st.error(f"Merging failed: {error}")
-    else:
-        st.error("Could not read the first file to determine potential identifiers.")
-else:
-    st.info("Please upload CSV files to merge.")
+                with st.spinner("Merging CSV files..."):
+                    merged_df = merge_csvs(uploaded_files, unique_identifier)
+                    
+                if merged_df is not None:
+                    st.success("CSV files merged successfully!")
+                    
+                    # Display merged DataFrame
+                    st.subheader("Merged Data Preview")
+                    st.dataframe(merged_df.head())
+                    
+                    # Download button for merged CSV
+                    csv = merged_df.to_csv(index=False)
+                    st.download_button(
+                        label="Download Merged CSV",
+                        data=csv,
+                        file_name="merged_data.csv",
+                        mime="text/csv",
+                    )
+                    
+                    # Display statistics
+                    st.subheader("Merged Data Statistics")
+                    st.write(f"Total rows: {len(merged_df)}")
+                    st.write(f"Total columns: {len(merged_df.columns)}")
+                    
+                    # Display column names
+                    st.subheader("Columns in Merged Data")
+                    st.write(", ".join(merged_df.columns))
 
-# Display file details
-if uploaded_files:
-    st.subheader("Uploaded File Details:")
-    for file in uploaded_files:
-        df, error = read_csv_file(file)
-        if df is not None:
-            st.write(f"File: {file.name}")
-            st.write(f"Columns: {', '.join(df.columns)}")
-            st.write(f"Rows: {len(df)}")
-            st.write("---")
-        else:
-            st.warning(f"Could not read file {file.name}: {error}")
+if __name__ == "__main__":
+    main()
