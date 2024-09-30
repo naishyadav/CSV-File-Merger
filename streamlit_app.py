@@ -10,14 +10,24 @@ def load_csv(file):
         st.error(f"Error reading file {file.name}: {str(e)}")
         return None
 
-def intelligent_merge(df1, df2, unique_identifier):
-    # Identify new columns in df2
-    new_columns = [col for col in df2.columns if col not in df1.columns and col != unique_identifier]
+def comprehensive_merge(dfs, unique_identifier):
+    # Start with the first DataFrame
+    merged_df = dfs[0]
     
-    # Merge df1 with only the new columns from df2
-    merged = pd.merge(df1, df2[[unique_identifier] + new_columns], on=unique_identifier, how='outer')
+    # Iterate through the rest of the DataFrames
+    for df in dfs[1:]:
+        # Identify new columns in the current DataFrame
+        new_columns = [col for col in df.columns if col not in merged_df.columns and col != unique_identifier]
+        
+        # Merge the current DataFrame with only its new columns
+        merged_df = pd.merge(
+            merged_df, 
+            df[[unique_identifier] + new_columns], 
+            on=unique_identifier, 
+            how='outer'
+        )
     
-    return merged
+    return merged_df
 
 def merge_csvs(files, unique_identifier):
     dfs = []
@@ -38,14 +48,11 @@ def merge_csvs(files, unique_identifier):
             st.error(f"Error: The unique identifier '{unique_identifier}' is not present in file {files[i].name}.")
             return None
     
-    # Merge all DataFrames
-    merged_df = dfs[0]
-    for i, df in enumerate(dfs[1:], start=1):
-        try:
-            merged_df = intelligent_merge(merged_df, df, unique_identifier)
-        except Exception as e:
-            st.error(f"Error merging file {files[i].name}: {str(e)}")
-            return None
+    try:
+        merged_df = comprehensive_merge(dfs, unique_identifier)
+    except Exception as e:
+        st.error(f"Error merging files: {str(e)}")
+        return None
     
     return merged_df
 
@@ -53,7 +60,7 @@ def main():
     st.set_page_config(page_title="CSV Merger App", layout="wide")
     
     st.title("CSV Merger App")
-    st.write("This app merges multiple CSV files into a master CSV file using a unique identifier, adding only new columns from each file.")
+    st.write("This app merges multiple CSV files into a master CSV file using a unique identifier, combining all unique data and columns.")
     
     # File uploader
     uploaded_files = st.file_uploader("Choose CSV files", accept_multiple_files=True, type="csv")
